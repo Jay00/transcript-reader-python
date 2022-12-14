@@ -28,7 +28,9 @@ qa = re.compile("^[AQ]\.\s+")  # Capture Q. or A.
 speaker = re.compile(
     "^[A-Z\.\s]+:"
 )  # Capture new speaker, ie., COURT:, MR. CLARK: BY MR. SMITH:
-by_mr_smith = re.compile("^BY [A-Z\.\s]+:$")  # Capture new speaker, ie., BY MR. SMITH:
+# Capture new speaker, ie., BY MR. SMITH:
+by_mr_smith = re.compile("^BY [A-Z\.\s]+:$")
+empty_line_number = re.compile("^[0-9]{1,2}$")
 
 
 def _update_dict(this_dict: dict, l: Line, note) -> dict:
@@ -76,6 +78,7 @@ def _analyze_lines(lines: List[Line]):
 
     q_a_dict = dict()
     speaker_dict = dict()
+    empty_lines_dict = dict()
     other_dict = dict()
 
     for l in lines:
@@ -88,6 +91,10 @@ def _analyze_lines(lines: List[Line]):
             # MR. SMITH:
             _update_dict(speaker_dict, l, "New Speaker Position")
 
+        elif empty_line_number.search(l.text):
+            # Check for remaining empty line numbers
+            _update_dict(empty_lines_dict, l, "Empty Line Number Position")
+
         else:
             # After Questions, Answers, and new speakers, continuation
             # lines should be the most frequent start position we encounter.
@@ -96,10 +103,12 @@ def _analyze_lines(lines: List[Line]):
     q_position = _get_result(q_a_dict)
     speaker_position = _get_result(speaker_dict)
     continuation_position = _get_result(other_dict)
+    line_number_position = _get_result(empty_lines_dict)
 
     print(f"Q and A Position: {q_position}")
     print(f"Speakers Position: {speaker_position}")
     print(f"Continuation Position: {continuation_position}")
+    print(f"Line Number Position: {line_number_position}")
 
     return (continuation_position, q_position, speaker_position)
 
@@ -108,21 +117,22 @@ def lines_to_paragraphs(lines: List[Line]):
 
     pos_continue, pos_question, pos_speaker = _analyze_lines(lines)
 
+    # So rather than compare two very specific floats,
+    # lets add 1.5 and cast to an integer
+    # anything less than this x value, will be a continuation line
+    continue_integer = int(pos_continue + 1.5)
+
     paragraphs = list()
     new_paragraph = ""
     current_page_number = 0
     starting_line = 0
     ending_line = 0
+
     for l in lines:
 
-        # Add Page Number
-        if current_page_number != l.page:
-            # New Page reached
-            paragraphs.append(f"[PAGE: {l.page}]\n")
-
         # Check for new speaker, ie, MR. SMITH
-        if l.start_position == pos_continue:
-            print("Continue")
+        if l.start_position <= continue_integer:
+            # print(f"Continue {l.start_position} less than {continue_integer}")
             # continue
             new_paragraph = f"{new_paragraph} {l.text}"
             ending_line = l.line_number
@@ -132,8 +142,9 @@ def lines_to_paragraphs(lines: List[Line]):
             # Something New
             # This is on a new line, so deal witht the
             # pre-existing paragraph before checking the new one
-            paragraphs.append(f"[{starting_line, ending_line}]  {new_paragraph}")
-            print(f"Append: {new_paragraph}")
+            paragraphs.append(
+                f"[{starting_line}-{ending_line}]  {new_paragraph}")
+            # print(f"Append: {new_paragraph}")
 
             # Reset to new text
             starting_line = l.line_number
@@ -149,5 +160,14 @@ def lines_to_paragraphs(lines: List[Line]):
             if speaker.search(l.text):
                 # New Speaker
                 pass
+
+        # Add Page Number
+        if current_page_number != l.page:
+            # print(f"This page: {current_page_number}, last page: {l.page}")
+            # New Page reached
+            paragraphs.append(f"[PAGE: {l.page}]")
+
+        # Update Current Page Number
+        current_page_number = l.page
 
     return paragraphs
