@@ -58,9 +58,11 @@ def _get_result(values_dict: dict) -> float | None:
     Returns the start position which occurs most frequently in the values_dict.
     """
 
+    # Sort tuple (start_position, number of occurences)
     sorted_tuples = sorted(values_dict.items(), key=lambda kv: -kv[1])
 
     if len(sorted_tuples) > 0:
+        # return the most frequent start position for this dictionary
         return sorted_tuples[0][0]
     else:
         return None
@@ -108,7 +110,13 @@ def lines_to_paragraphs(lines: List[Line]):
 
     paragraphs = list()
     new_paragraph = ""
+    current_page_number = 0
     for l in lines:
+
+        # Add Page Number
+        if current_page_number != l.page:
+            # New Page reached
+            paragraphs.append(f"[PAGE: {l.page}]\n")
 
         # Check for new speaker, ie, MR. SMITH
         if l.start_position == pos_continue:
