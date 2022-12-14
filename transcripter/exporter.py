@@ -111,6 +111,8 @@ def lines_to_paragraphs(lines: List[Line]):
     paragraphs = list()
     new_paragraph = ""
     current_page_number = 0
+    starting_line = 0
+    ending_line = 0
     for l in lines:
 
         # Add Page Number
@@ -123,14 +125,19 @@ def lines_to_paragraphs(lines: List[Line]):
             print("Continue")
             # continue
             new_paragraph = f"{new_paragraph} {l.text}"
+            ending_line = l.line_number
 
         # Check for (PAUSE), or other court reporter note
         else:
             # Something New
             # This is on a new line, so deal witht the
             # pre-existing paragraph before checking the new one
-            paragraphs.append(new_paragraph)
+            paragraphs.append(f"[{starting_line, ending_line}]  {new_paragraph}")
             print(f"Append: {new_paragraph}")
+
+            # Reset to new text
+            starting_line = l.line_number
+            ending_line = l.line_number
             new_paragraph = l.text
             # Check if starts with  Q. or A.
             if qa.search(l.text):
