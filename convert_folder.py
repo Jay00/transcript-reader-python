@@ -23,6 +23,7 @@ pdfminerSixLogger.setLevel(logging.ERROR)
 def convert_file(file_path: Path):
 
     if not file_path.is_file():
+        # Skip
         return
 
     if file_path.suffix != ".pdf":
