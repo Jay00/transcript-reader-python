@@ -33,7 +33,11 @@ def convert_file(file_path: Path):
     document = open(file_path, "rb")
     lines = MinePDFTranscript(document)
     paragraphs = lines_to_paragraphs(
-        lines, include_page_numbers=True, include_line_numbers=True
+        lines,
+        include_page_numbers=True,
+        include_line_numbers=True,
+        include_q_a_next_to_line_number=True,
+        include_date_with_page_numbers=False,
     )
 
     txt_file = file_path.with_suffix(".txt")
@@ -50,7 +54,11 @@ def main(dir):
         for name in files:
             print(root, name)
             p = Path(root, name)
-            convert_file(p)
+            # only look at PDF documents
+            if p.suffix == ".pdf":
+                convert_file(p)
+            else:
+                logger.info(f"Skipping file with suffix: {p.suffix}")
             # print(os.path.join(root, name))
         # for name in dirs:
         #     print(os.path.join(root, name))

@@ -3,6 +3,7 @@ import re
 from typing import List, Type, IO
 from transcripter.miner import Line
 import pprint
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,17 @@ class Speaker(object):
 
 
 qa = re.compile("^[AQ]\.\s+")  # Capture Q. or A.
+# qa = re.compile("^[AQ]")  # Capture Q. or A.
+# qa_loose_greedy = re.compile("^[AQ][\s\.]+")
 speaker = re.compile(
     "^[A-Z\.\s]+:"
 )  # Capture new speaker, ie., COURT:, MR. CLARK: BY MR. SMITH:
 # Capture new speaker, ie., BY MR. SMITH:
 by_mr_smith = re.compile("^BY [A-Z\.\s]+:$")
 empty_line_number = re.compile("^[0-9]{1,2}$")
+date_line_re = re.compile(
+    "^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), (January|February|March|April|May|June|July|August|September|October|November|December) ([\d]+), ([\d]{4})$"
+)
 
 
 def _update_dict(this_dict: dict, l: Line, note) -> dict:
@@ -112,16 +118,18 @@ def _analyze_lines(lines: List[Line]):
     print(f"Continuation Position: {continuation_position}")
     print(f"Line Number Position: {line_number_position}")
 
-    return (continuation_position, q_position, speaker_position)
+    return (line_number_position, continuation_position, q_position, speaker_position)
 
 
 def lines_to_paragraphs(
     lines: List[Line],
     include_page_numbers: bool = True,
-    include_line_numbers: bool = True,
+    include_line_numbers: bool = False,
+    include_q_a_next_to_line_number: bool = False,
+    include_date_with_page_numbers: bool = False,
 ):
 
-    pos_continue, pos_question, pos_speaker = _analyze_lines(lines)
+    pos_line_number, pos_continue, pos_question, pos_speaker = _analyze_lines(lines)
 
     # So rather than compare two very specific floats,
     # lets add 1.5 and cast to an integer
@@ -133,8 +141,17 @@ def lines_to_paragraphs(
     current_page_number = 0
     starting_line = 0
     ending_line = 0
+    date_of_transcript: datetime | None = None
 
     for l in lines:
+
+        if current_page_number == 1:
+            # If this is the first page. Lets look for the
+            # date of this transcript.
+            if date_line_re.search(l.text):
+                # Transcript date found
+                date_of_transcript = datetime.strptime(l.text, "%A, %B %d, %Y")
+                print(f"Date: {date_of_transcript.strftime('%A, %B %d, %Y')}")
 
         # Check if this line is a new line or a continuing line
         # Assumes all lines to the left of the continue_integer are
@@ -142,10 +159,19 @@ def lines_to_paragraphs(
         if l.start_position <= continue_integer:
             # print(f"Continue {l.start_position} less than {continue_integer}")
             # continue
-            new_paragraph = f"{new_paragraph} {l.text}"
-            # Update the ending line number each time a continuation line
-            # is evaluated.
-            ending_line = l.line_number
+            if l.start_position <= pos_line_number:
+                # This is an empty line number to the far left of the page
+                # print(
+                #     f"Skipping empty line. Page: {current_page_number}, Text: {l.text}"
+                # )
+                pass
+                # Note: We need to pass here. You cannot use continue because
+                # we need the rest of the loop to be evaluated.
+            else:
+                new_paragraph = f"{new_paragraph} {l.text}"
+                # Update the ending line number each time a continuation line
+                # is evaluated.
+                ending_line = l.line_number
 
         else:
             # This is to the right of the continuation integer.
@@ -159,24 +185,36 @@ def lines_to_paragraphs(
                 # Note: Some tts reader ignore text inside square brackets.
                 # Most listeners will not want to hear the line numbers read for
                 # each new paragraph.
-                paragraphs.append(f"[{starting_line}-{ending_line}]  {new_paragraph}")
+
+                line_nums = f"{starting_line}-{ending_line}"
+                line_nums = "{:<5}".format(line_nums)
+
+                line_nums = f"[{line_nums}]"
+                paragraphs.append(f"{line_nums}  {new_paragraph}")
             else:
                 # Just the paragraph
                 paragraphs.append(new_paragraph)
-                # print(f"Append: {new_paragraph}")
+                print(f"Append: {new_paragraph}")
 
+            # START NEW PARAGRAPH
             # Reset Vars
             starting_line = l.line_number  # The starting line of this new paragraph
             ending_line = l.line_number
             new_paragraph = l.text
             # Check if starts with  Q. or A.
-            if qa.search(l.text):
-                # REMOVE Q. A. , + Add break
+            mo_qa = qa.search(l.text)
+            # Check if Q. or A.
+            if mo_qa:
+                # Just REMOVE Q. A.
                 # Q. A. constantly being read aloud is distracting and interupts the flow
-                new_paragraph = qa.sub("", l.text)
+                new_paragraph = qa.sub("", new_paragraph)
+
+                if include_q_a_next_to_line_number:
+                    # Add Question or Answer back in but with brackets
+                    new_paragraph = f"[{mo_qa.group().strip()}] {new_paragraph}"
 
             # Check if new speaker, ie. MR. NAME:
-            if speaker.search(l.text):
+            if speaker.search(new_paragraph):
                 # New Speaker
                 pass
 
@@ -187,7 +225,16 @@ def lines_to_paragraphs(
                 # If the current page number has changed, add
                 # the current page number into the list of paragraphs.
                 # print(f"This page: {current_page_number}, last page: {l.page}")
-                paragraphs.append(f"[PAGE: {l.page}]")
+                if include_date_with_page_numbers:
+                    # Check that date_of_transcript is not None
+                    if date_of_transcript:
+                        paragraphs.append(
+                            f"[PAGE: {l.page}, Date: {date_of_transcript.strftime('%A, %B %d, %Y')}]"
+                        )
+                    else:
+                        paragraphs.append(f"[PAGE: {l.page}]")
+                else:
+                    paragraphs.append(f"[PAGE: {l.page}]")
 
         # Update Current Page Number
         current_page_number = l.page
