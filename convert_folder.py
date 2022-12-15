@@ -1,5 +1,5 @@
 import logging
-import pathlib
+from pathlib import Path
 
 import os
 
@@ -20,29 +20,43 @@ pdfminerSixLogger = logging.getLogger("pdfminer")
 pdfminerSixLogger.setLevel(logging.ERROR)
 
 
-def convert_file(file_path):
-    input_file = pathlib.Path(file_path)
-    document = open(input_path, "rb")
-    lines = MinePDFTranscript(document)
-    paragraphs = lines_to_paragraphs(lines)
+def convert_file(file_path: Path):
 
-    with open(f"{input_path}.txt", "w") as file:
+    if not file_path.is_file():
+        return
+
+    if file_path.suffix != ".pdf":
+        print("Not PDF")
+
+    print(f"Processing {file_path.name}")
+
+    document = open(file_path, "rb")
+    lines = MinePDFTranscript(document)
+    paragraphs = lines_to_paragraphs(
+        lines, include_page_numbers=True, include_line_numbers=True
+    )
+
+    txt_file = file_path.with_suffix(".txt")
+    with open(txt_file, "w") as file:
         for par in paragraphs:
             file.write(f"{par}\n")
 
     print(f"Processed {len(lines)} lines. FINISHED.")
 
 
-def main():
+def main(dir):
 
-    for root, dirs, files in os.walk(".", topdown=False):
+    for root, dirs, files in os.walk(dir, topdown=False):
         for name in files:
-            print(os.path.join(root, name))
-        for name in dirs:
-            print(os.path.join(root, name))
+            print(root, name)
+            p = Path(root, name)
+            convert_file(p)
+            # print(os.path.join(root, name))
+        # for name in dirs:
+        #     print(os.path.join(root, name))
 
 
 if __name__ == "__main__":
-    main()
+    main("./turner")
 
     print(f"FINISHED.")
