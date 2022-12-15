@@ -93,6 +93,8 @@ def _analyze_lines(lines: List[Line]):
 
         elif empty_line_number.search(l.text):
             # Check for remaining empty line numbers
+            # Note: Line number are already filtered out by the miner module,
+            # however, empty lines are left in.
             _update_dict(empty_lines_dict, l, "Empty Line Number Position")
 
         else:
@@ -113,7 +115,11 @@ def _analyze_lines(lines: List[Line]):
     return (continuation_position, q_position, speaker_position)
 
 
-def lines_to_paragraphs(lines: List[Line]):
+def lines_to_paragraphs(
+    lines: List[Line],
+    include_page_numbers: bool = True,
+    include_line_numbers: bool = True,
+):
 
     pos_continue, pos_question, pos_speaker = _analyze_lines(lines)
 
@@ -130,24 +136,37 @@ def lines_to_paragraphs(lines: List[Line]):
 
     for l in lines:
 
-        # Check for new speaker, ie, MR. SMITH
+        # Check if this line is a new line or a continuing line
+        # Assumes all lines to the left of the continue_integer are
+        # continuations of the same paragraph.
         if l.start_position <= continue_integer:
             # print(f"Continue {l.start_position} less than {continue_integer}")
             # continue
             new_paragraph = f"{new_paragraph} {l.text}"
+            # Update the ending line number each time a continuation line
+            # is evaluated.
             ending_line = l.line_number
 
-        # Check for (PAUSE), or other court reporter note
         else:
-            # Something New
-            # This is on a new line, so deal witht the
-            # pre-existing paragraph before checking the new one
-            paragraphs.append(
-                f"[{starting_line}-{ending_line}]  {new_paragraph}")
-            # print(f"Append: {new_paragraph}")
+            # This is to the right of the continuation integer.
+            # This should be a new paragraph.
 
-            # Reset to new text
-            starting_line = l.line_number
+            # This is the start of a new paragraph, so deal with the
+            # pre-existing paragraph before checking the new one
+
+            if include_line_numbers:
+                # Insert the line numbers in side square brackets
+                # Note: Some tts reader ignore text inside square brackets.
+                # Most listeners will not want to hear the line numbers read for
+                # each new paragraph.
+                paragraphs.append(f"[{starting_line}-{ending_line}]  {new_paragraph}")
+            else:
+                # Just the paragraph
+                paragraphs.append(new_paragraph)
+                # print(f"Append: {new_paragraph}")
+
+            # Reset Vars
+            starting_line = l.line_number  # The starting line of this new paragraph
             ending_line = l.line_number
             new_paragraph = l.text
             # Check if starts with  Q. or A.
@@ -161,11 +180,14 @@ def lines_to_paragraphs(lines: List[Line]):
                 # New Speaker
                 pass
 
-        # Add Page Number
-        if current_page_number != l.page:
-            # print(f"This page: {current_page_number}, last page: {l.page}")
-            # New Page reached
-            paragraphs.append(f"[PAGE: {l.page}]")
+        if include_page_numbers:
+            # Add Page Numbers as Separate paragraphs in the list
+            if current_page_number != l.page:
+                # New page reached.
+                # If the current page number has changed, add
+                # the current page number into the list of paragraphs.
+                # print(f"This page: {current_page_number}, last page: {l.page}")
+                paragraphs.append(f"[PAGE: {l.page}]")
 
         # Update Current Page Number
         current_page_number = l.page
