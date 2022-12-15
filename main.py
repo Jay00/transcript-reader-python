@@ -1,13 +1,74 @@
 import logging
-import pathlib
+from pathlib import Path
+import os
+import sys
 
-from transcripter.miner import MinePDFTranscript
-from transcripter.exporter import lines_to_paragraphs
+from miner import MinePDFTranscript
+from exporter import lines_to_paragraphs
 
 logger = logging.getLogger(__name__)
 
 
+def convert_file(file_path: Path):
+
+    if not file_path.is_file():
+        logger.warning(f"Path is not a file: {file_path}")
+        return
+
+    if file_path.suffix != ".pdf":
+        logger.warning(f"This file is not a PDF: {file_path}")
+
+    logger.info(f"Processing {file_path.name}")
+
+    document = open(file_path, "rb")
+    lines = MinePDFTranscript(document)
+    paragraphs = lines_to_paragraphs(
+        lines,
+        include_page_numbers=True,
+        include_line_numbers=True,
+        include_q_a_next_to_line_number=True,
+        include_date_with_page_numbers=False,
+    )
+
+    txt_file = file_path.with_suffix(".txt")
+    with open(txt_file, "w") as file:
+        for par in paragraphs:
+            file.write(f"{par}\n")
+
+    logger.info(f"Processed {len(lines)} transcript lines.")
+
+
+def main(path_str: str):
+
+    path = Path(path_str)
+
+    if path.is_dir():
+
+        for root, dirs, files in os.walk(path, topdown=False):
+            for name in files:
+                p = Path(root, name)
+                # only look at PDF documents
+                if p.suffix == ".pdf" or p.suffix == ".PDF":
+                    convert_file(p)
+                else:
+                    logger.info(f"Skipping file with invalid suffix: {p.suffix}")
+    else:
+        # Single File
+        if path.is_file():
+            convert_file(path)
+
+
 if __name__ == "__main__":
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(levelname)s.%(name)s - %(message)s")
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
     logging.basicConfig(
         filename="miner.log",
         filemode="w",
@@ -18,13 +79,14 @@ if __name__ == "__main__":
     pdfminerSixLogger = logging.getLogger("pdfminer")
     pdfminerSixLogger.setLevel(logging.ERROR)
 
-    input_path = pathlib.Path("./test2.pdf")
-    document = open(input_path, "rb")
-    lines = MinePDFTranscript(document)
-    paragraphs = lines_to_paragraphs(lines)
+    import argparse
 
-    with open(f"{input_path}.txt", "w") as file:
-        for par in paragraphs:
-            file.write(f"{par}\n")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path")
+    args = parser.parse_args()
+    print(args.path)
 
-    print(f"Processed {len(lines)} lines. FINISHED.")
+    main(args.path)
+    # main("./omar")
+
+    print(f"COMPLETE")

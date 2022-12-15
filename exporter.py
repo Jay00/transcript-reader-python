@@ -1,7 +1,7 @@
 import logging
 import re
 from typing import List, Type, IO
-from transcripter.miner import Line
+from miner import Line
 import pprint
 from datetime import datetime
 
@@ -25,9 +25,9 @@ class Speaker(object):
         return f"Speaker: {self.primary_speaker}"
 
 
-qa = re.compile("^[AQ]\.\s+")  # Capture Q. or A.
+# qa = re.compile("^[AQ]\.\s+")  # Capture Q. or A.
 # qa = re.compile("^[AQ]")  # Capture Q. or A.
-# qa_loose_greedy = re.compile("^[AQ][\s\.]+")
+qa = re.compile("^[AQ][\s\.]+")  # Loose and Greedy
 speaker = re.compile(
     "^[A-Z\.\s]+:"
 )  # Capture new speaker, ie., COURT:, MR. CLARK: BY MR. SMITH:
@@ -113,10 +113,10 @@ def _analyze_lines(lines: List[Line]):
     continuation_position = _get_result(other_dict)
     line_number_position = _get_result(empty_lines_dict)
 
-    print(f"Q and A Position: {q_position}")
-    print(f"Speakers Position: {speaker_position}")
-    print(f"Continuation Position: {continuation_position}")
-    print(f"Line Number Position: {line_number_position}")
+    logger.debug(f"Q and A Position: {q_position}")
+    logger.debug(f"Speakers Position: {speaker_position}")
+    logger.debug(f"Continuation Position: {continuation_position}")
+    logger.debug(f"Line Number Position: {line_number_position}")
 
     return (line_number_position, continuation_position, q_position, speaker_position)
 
@@ -151,7 +151,7 @@ def lines_to_paragraphs(
             if date_line_re.search(l.text):
                 # Transcript date found
                 date_of_transcript = datetime.strptime(l.text, "%A, %B %d, %Y")
-                print(f"Date: {date_of_transcript.strftime('%A, %B %d, %Y')}")
+                logger.debug(f"Date: {date_of_transcript.strftime('%A, %B %d, %Y')}")
 
         # Check if this line is a new line or a continuing line
         # Assumes all lines to the left of the continue_integer are
@@ -194,7 +194,7 @@ def lines_to_paragraphs(
             else:
                 # Just the paragraph
                 paragraphs.append(new_paragraph)
-                print(f"Append: {new_paragraph}")
+                # logger.debug(f"Append: {new_paragraph}")
 
             # START NEW PARAGRAPH
             # Reset Vars

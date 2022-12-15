@@ -1,5 +1,3 @@
-import operator
-import re
 from enum import Enum
 from typing import List, Type, IO
 from datetime import datetime
