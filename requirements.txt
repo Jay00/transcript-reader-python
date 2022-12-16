@@ -1,0 +1,2 @@
+charset-normalizer==2.1.0 #Downgrade due to issue with pyinstaller
+pdfminer.six
