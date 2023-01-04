@@ -51,7 +51,8 @@ def main(path_str: str):
                 if p.suffix == ".pdf" or p.suffix == ".PDF":
                     convert_file(p)
                 else:
-                    logger.info(f"Skipping file with invalid suffix: {p.suffix}")
+                    logger.info(
+                        f"Skipping file with invalid suffix: {p.suffix}")
     else:
         # Single File
         if path.is_file():
@@ -81,8 +82,24 @@ if __name__ == "__main__":
 
     import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("path")
+    parser = argparse.ArgumentParser(
+        prog="Transcript Extractor",
+        description="Extract and format text from PDF transcripts.",
+        epilog="For more information."
+    )
+    # positional argument
+    parser.add_argument(
+        "path",
+        help="A path to a PDF transcript or directory contiaining PDF transcripts."
+    )
+
+    # parser.add_argument(
+    #     "--include-page-numbers",
+    #     required=False,
+    #     type=bool,
+    #     help="Whether the program should include page numbers in the output txt file. The default is True."
+    # )
+    # parser.add_argument('--include_date_with_page_numbers')
     args = parser.parse_args()
     print(args.path)
 
