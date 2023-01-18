@@ -49,10 +49,14 @@ def main(path_str: str):
                 p = Path(root, name)
                 # only look at PDF documents
                 if p.suffix == ".pdf" or p.suffix == ".PDF":
-                    convert_file(p)
+                    try:
+                        convert_file(p)
+                    except Exception as err:
+                        logger.error(f"ERROR: Unable to Process File: {p.__str__()}")
+                        logger.error(err)
+
                 else:
-                    logger.info(
-                        f"Skipping file with invalid suffix: {p.suffix}")
+                    logger.info(f"Skipping file with invalid suffix: {p.suffix}")
     else:
         # Single File
         if path.is_file():
@@ -85,12 +89,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="Transcript Extractor",
         description="Extract and format text from PDF transcripts.",
-        epilog="For more information."
+        epilog="For more information.",
     )
     # positional argument
     parser.add_argument(
         "path",
-        help="A path to a PDF transcript or directory contiaining PDF transcripts."
+        help="A path to a PDF transcript or directory contiaining PDF transcripts.",
     )
 
     # parser.add_argument(
