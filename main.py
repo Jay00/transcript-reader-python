@@ -9,8 +9,7 @@ from exporter import lines_to_paragraphs
 logger = logging.getLogger(__name__)
 
 
-def convert_file(file_path: Path):
-
+def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=False):
     if not file_path.is_file():
         logger.warning(f"Path is not a file: {file_path}")
         return
@@ -24,10 +23,10 @@ def convert_file(file_path: Path):
     lines = MinePDFTranscript(document)
     paragraphs = lines_to_paragraphs(
         lines,
-        include_page_numbers=True,
-        include_line_numbers=True,
-        include_q_a_next_to_line_number=True,
-        include_date_with_page_numbers=False,
+        include_page_numbers=pgNum,
+        include_line_numbers=lnNum,
+        include_q_a_next_to_line_number=qa,
+        include_date_with_page_numbers=date,
     )
 
     txt_file = file_path.with_suffix(".txt")
@@ -38,25 +37,26 @@ def convert_file(file_path: Path):
     logger.info(f"Processed {len(lines)} transcript lines.")
 
 
-def main(path_str: str):
-
+def main(path_str: str, pgNum=True, lnNum=True, qa=True, date=False):
     path = Path(path_str)
 
     if path.is_dir():
-
         for root, dirs, files in os.walk(path, topdown=False):
             for name in files:
                 p = Path(root, name)
                 # only look at PDF documents
                 if p.suffix == ".pdf" or p.suffix == ".PDF":
                     try:
-                        convert_file(p)
+                        convert_file(p, pgNum=pgNum, lnNum=lnNum,
+                                     qa=qa, date=date)
                     except Exception as err:
-                        logger.error(f"ERROR: Unable to Process File: {p.__str__()}")
+                        logger.error(
+                            f"ERROR: Unable to Process File: {p.__str__()}")
                         logger.error(err)
 
                 else:
-                    logger.info(f"Skipping file with invalid suffix: {p.suffix}")
+                    logger.info(
+                        f"Skipping file with invalid suffix: {p.suffix}")
     else:
         # Single File
         if path.is_file():
@@ -64,7 +64,6 @@ def main(path_str: str):
 
 
 if __name__ == "__main__":
-
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
 
