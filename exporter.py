@@ -35,7 +35,7 @@ speaker = re.compile(
 by_mr_smith = re.compile("^BY [A-Z\.\s]+:$")
 empty_line_number = re.compile("^[0-9]{1,2}$")
 date_line_re = re.compile(
-    "^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), (January|February|March|April|May|June|July|August|September|October|November|December) ([\d]+), ([\d]{4})$"
+    "(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), (January|February|March|April|May|June|July|August|September|October|November|December) ([\d]+), ([\d]{4})$"
 )
 
 
@@ -82,36 +82,66 @@ def _analyze_lines(lines: List[Line]):
     of the Q. A.'s, the new speakers, and the continuation line.
     """
 
+    logger.info("Analyzing Lines")
+    # logger.debug(lines)
+    # logger.debug(f"Lines: {pprint.pprint(lines)}")
+    logger.debug(f"Lines:\n{pprint.pformat(lines)}")
+
     q_a_dict = dict()
     speaker_dict = dict()
     empty_lines_dict = dict()
     other_dict = dict()
 
     for l in lines:
+        logger.debug(l)
         if qa.search(l.text):
             # Q. A. Detected
+            logger.debug("Q. A. Detected")
             _update_dict(q_a_dict, l, "New Questions Position")
 
         elif speaker.search(l.text):
             # New speaker detected
             # MR. SMITH:
+            logger.debug("New speaker detected")
             _update_dict(speaker_dict, l, "New Speaker Position")
 
         elif empty_line_number.search(l.text):
             # Check for remaining empty line numbers
             # Note: Line number are already filtered out by the miner module,
             # however, empty lines are left in.
+            logger.debug("Empty Line Number Detected")
             _update_dict(empty_lines_dict, l, "Empty Line Number Position")
 
         else:
             # After Questions, Answers, and new speakers, continuation
             # lines should be the most frequent start position we encounter.
+            logger.debug("Other (Continuation) Line Detected")
             _update_dict(other_dict, l, "New Other Position")
 
+    logger.debug(f"q_a_dict:\n{pprint.pformat(q_a_dict)}")
+    logger.debug(f"speaker_dict:\n{pprint.pformat(speaker_dict)}")
+    logger.debug(f"empty_lines_dict:\n{pprint.pformat(empty_lines_dict)}")
+    logger.debug(f"other_dict:\n{pprint.pformat(other_dict)}")
+
     q_position = _get_result(q_a_dict)
+    logger.info(f"q_position: {q_position}")
     speaker_position = _get_result(speaker_dict)
+    logger.info(f"speaker_position: {speaker_position}")
     continuation_position = _get_result(other_dict)
+    logger.info(f"continuation_position: {continuation_position}")
     line_number_position = _get_result(empty_lines_dict)
+    logger.info(f"line_number_position: {line_number_position}")
+
+    if not line_number_position:
+        logger.error(
+            f"Line number position not detected. This is an error. The system must be able to detect the position of the line number.")
+
+        logger.error(empty_lines_dict)
+        # No empty line numbers detected.
+
+        # Assume the empty line number position is X less than continuation_position
+        line_number_position = continuation_position - 4
+        # raise Exception("Line number not detected. Aborting.")
 
     logger.debug(f"Q and A Position: {q_position}")
     logger.debug(f"Speakers Position: {speaker_position}")
@@ -129,7 +159,11 @@ def lines_to_paragraphs(
     include_date_with_page_numbers: bool = False,
 ):
 
-    pos_line_number, pos_continue, pos_question, pos_speaker = _analyze_lines(lines)
+    logger.debug("Starting lines_to_paragraphs")
+    logger.debug(f"Lines:\n{pprint.pformat(lines)}")
+
+    pos_line_number, pos_continue, pos_question, pos_speaker = _analyze_lines(
+        lines)
 
     # So rather than compare two very specific floats,
     # lets add 1.5 and cast to an integer
@@ -144,21 +178,26 @@ def lines_to_paragraphs(
     date_of_transcript: datetime | None = None
 
     for l in lines:
-
+        logger.debug(l)
         if current_page_number == 1:
             # If this is the first page. Lets look for the
             # date of this transcript.
-            if date_line_re.search(l.text):
+            # logger.info(l.text)
+            date_match = date_line_re.search(l.text)
+            if date_match:
                 # Transcript date found
-                date_of_transcript = datetime.strptime(l.text, "%A, %B %d, %Y")
-                logger.debug(f"Date: {date_of_transcript.strftime('%A, %B %d, %Y')}")
+                date_of_transcript = datetime.strptime(
+                    date_match.group(0), "%A, %B %d, %Y")
+                logger.info(
+                    f"Transcript Date: {date_of_transcript.strftime('%A, %B %d, %Y')}")
 
         # Check if this line is a new line or a continuing line
         # Assumes all lines to the left of the continue_integer are
         # continuations of the same paragraph.
         if l.start_position <= continue_integer:
-            # print(f"Continue {l.start_position} less than {continue_integer}")
-            # continue
+            logger.debug(
+                f"Continue {l.start_position} less than {continue_integer}")
+
             if l.start_position <= pos_line_number:
                 # This is an empty line number to the far left of the page
                 # print(
@@ -229,7 +268,7 @@ def lines_to_paragraphs(
                     # Check that date_of_transcript is not None
                     if date_of_transcript:
                         paragraphs.append(
-                            f"[PAGE: {l.page}, Date: {date_of_transcript.strftime('%A, %B %d, %Y')}]"
+                            f"[PAGE: {l.page}, {date_of_transcript.strftime('%A, %B %d, %Y')}]"
                         )
                     else:
                         paragraphs.append(f"[PAGE: {l.page}]")

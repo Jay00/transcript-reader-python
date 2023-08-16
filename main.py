@@ -9,7 +9,7 @@ from exporter import lines_to_paragraphs
 logger = logging.getLogger(__name__)
 
 
-def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=False):
+def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=True):
     if not file_path.is_file():
         logger.warning(f"Path is not a file: {file_path}")
         return
@@ -19,7 +19,10 @@ def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=False):
 
     logger.info(f"Processing {file_path.name}")
 
+    # Open the document stream
     document = open(file_path, "rb")
+
+    # Extract the lines
     lines = MinePDFTranscript(document)
     paragraphs = lines_to_paragraphs(
         lines,
@@ -30,14 +33,16 @@ def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=False):
     )
 
     txt_file = file_path.with_suffix(".txt")
-    with open(txt_file, "w") as file:
+    with open(txt_file, "w", encoding="utf-8") as file:
         for par in paragraphs:
             file.write(f"{par}\n")
 
     logger.info(f"Processed {len(lines)} transcript lines.")
 
 
-def main(path_str: str, pgNum=True, lnNum=True, qa=True, date=False):
+def main(path_str: str, pgNum=True, lnNum=True, qa=True, date=True):
+
+    logger.info(f"Processing Path: {path_str}")
     path = Path(path_str)
 
     if path.is_dir():
@@ -69,16 +74,24 @@ if __name__ == "__main__":
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(levelname)s.%(name)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(levelname)s.%(name)s - {%(pathname)s:%(lineno)d} - %(message)s")
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
-    logging.basicConfig(
-        filename="miner.log",
-        filemode="w",
-        format="%(levelname)s.%(name)s - %(message)s",
-        level=logging.INFO,
-    )
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler('transcript.log', mode="w", encoding="utf-8")
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    # add the handlers to the logger
+    root.addHandler(fh)
+
+    # logging.basicConfig(
+    #     filename="miner.log",
+    #     filemode="w",
+    #     format="%(levelname)s.%(name)s - %(message)s",
+    #     level=logging.INFO,
+    # )
 
     pdfminerSixLogger = logging.getLogger("pdfminer")
     pdfminerSixLogger.setLevel(logging.ERROR)

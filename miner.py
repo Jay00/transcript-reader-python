@@ -30,6 +30,11 @@ class TextElement(object):
 class Line(object):
     """
     Represents a single line of a transcript page.
+
+    page <int> The page number
+    line_number <int>
+    text <str>
+    start_position <float>
     """
 
     def __init__(self, page: int, line_number: int, start_position: float, text: str):
@@ -66,7 +71,8 @@ def MinePDFTranscript(
     # boxes_flow – Specifies how much a horizontal and vertical position of a text matters when determining the order of text boxes. The value should be within the range of -1.0 (only horizontal position matters) to +1.0 (only vertical position matters). You can also pass None to disable advanced layout analysis, and instead return text based on the position of the bottom left corner of the text box.
 
     laparams = LAParams(
-        line_overlap=0.5,  # Default 0.5; If two characters have more overlap than this they are considered to be on the same line. The overlap is specified relative to the minimum height of both characters.
+        # Default 0.5; If two characters have more overlap than this they are considered to be on the same line. The overlap is specified relative to the minimum height of both characters.
+        line_overlap=0.5,
         char_margin=0.5,  # Default 2.0
         line_margin=0.5,  # Default 0.5
         word_margin=0.0,  # Default 0.1
@@ -110,7 +116,8 @@ def MinePDFTranscript(
                 # y1: the distance from the bottom of the page to the upper edge of the box.
                 if bbox[0] > left_margin:
                     newElement = TextElement(page_num, element.bbox, text)
-                    # print(f"Append TextElement: {newElement}")
+                    print(f"Append TextElement: {newElement}")
+
                     elements_on_page.append(newElement)
 
         # print(f"Elements on Page:  {len(elements_on_page)}")
@@ -150,9 +157,11 @@ def _filter_lines(lines: List[Line], page_width: float) -> List[Line]:
     filtered_lines = list()
     for l in lines:
 
-        # Exclude Page Numbers
-        if l.start_position > page_width / 2:
+        # Exclude Printed Page Numbers
+        # (assumes they are on the right side of page)
+        if l.start_position > (page_width / 2) + 100:
             # This should be a line number on the right half of page
+            # Skip
             continue
 
         # All filters passed
@@ -175,8 +184,14 @@ def _convert_elements_on_page_into_lines(
 
     stage: List[TextElement] = list()
 
-    for i, e in enumerate(elements):
+    # Filter elements to remove empty elements
+    # (some elements are full of \n and other random empty space)
+    filtered_elements = [x for x in elements if x.text.strip()]
+
+    for i, e in enumerate(filtered_elements):
+        logger.info(f"Loop {i},\nStaged Len: {len(stage)}, Element: {e}")
         # print(f"Loop {i},\nStaged Len: {len(stage)}, Element: {e}")
+
         if i == 0:
             # First loop, we need to set last_top.
             # print(f"First loop last_top: {e.bbox[3]}")
@@ -197,11 +212,15 @@ def _convert_elements_on_page_into_lines(
             # Sort
             stage.sort(key=lambda x: (x.page, x.bbox[0]))
 
+            logger.debug(f"Stage: {stage}")
+
             first_element_on_line = stage[0]
             line_number = 0
             full_line_text = ""
             start_postion = 0
+
             try:
+                # Convert First Element into Int
                 line_number = int(first_element_on_line.text)
 
                 start_postion = stage[1].bbox[0]
