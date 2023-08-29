@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Type, IO
 from datetime import datetime
 import logging
+import re
 
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTTextBoxHorizontal
@@ -27,6 +28,20 @@ class TextElement(object):
         return f"<Pg.{self.page:02} {self.bbox} {self.text}>"
 
 
+def clean_string(s: str) -> str:
+    # Remove Empty Space
+    s = s.strip()
+    # Replace Double Space with Single Space
+    # s = s.replace("  ", " ")
+    # s = spaces_regex.sub(" ")
+
+    # \s+ to match all whitespaces
+    # replace them using single space " "
+    res_str = re.sub(r"\s+", " ", s)
+
+    return res_str
+
+
 class Line(object):
     """
     Represents a single line of a transcript page.
@@ -40,20 +55,23 @@ class Line(object):
     def __init__(self, page: int, line_number: int, start_position: float, text: str):
         self.page = page
         self.line_number = line_number
-        self.text = text.strip()
+        self.text = clean_string(text)
         self.start_position = start_position
         # self.positions = set()
         # self.column = self.evaluatSelfToSetType()
 
     def __repr__(self):
-        return f"Pg.{self.page:02} Ln: {self.line_number:02}, Start: {self.start_position}, Txt: {self.text}"
+        if not self.text:
+            return f"Pg.{self.page:02} Ln: {self.line_number:02}, Start: {self.start_position}, Txt: NO TEXT {bytes(self.text)}"
+        else:
+            return f"Pg.{self.page:02} Ln: {self.line_number:02}, Start: {self.start_position}, Txt: {self.text}"
 
 
 def MinePDFTranscript(
     pdfData: IO,
     left_margin: float = 0,
     right_margin: float = 0,
-    bottom_margin: float = 0,
+    bottom_margin: float = 53,
     top_margin: float = 0,
 ) -> List[Line]:
 
@@ -114,11 +132,19 @@ def MinePDFTranscript(
                 # y0: the distance from the bottom of the page to the lower edge of the box.
                 # x1: the distance from the left of the page to the right edge of the box.
                 # y1: the distance from the bottom of the page to the upper edge of the box.
-                if bbox[0] > left_margin:
-                    newElement = TextElement(page_num, element.bbox, text)
-                    print(f"Append TextElement: {newElement}")
 
-                    elements_on_page.append(newElement)
+                if bbox[0] > left_margin:  # Greater than Left Margin
+                    if bbox[1] > bottom_margin:  # Above Bottom Margin
+                        newElement = TextElement(page_num, element.bbox, text)
+                        logger.debug(f"Append TextElement: {newElement}")
+
+                        elements_on_page.append(newElement)
+                    else:
+                        logger.warn(
+                            f"Text Elements Below Bottom Margin: {text}")
+
+                else:
+                    logger.warn(f"Text Element outside Left Margin: {text}")
 
         # print(f"Elements on Page:  {len(elements_on_page)}")
         _sortElements_on_page(elements_on_page)
@@ -173,6 +199,69 @@ def _filter_lines(lines: List[Line], page_width: float) -> List[Line]:
     return filtered_lines
 
 
+def _create_line_from_staged_elements(stage: List[TextElement]) -> Line:
+    # This is a new line
+    # print("New line.")
+    # logger.debug(f"New Line detected. Processing staged line ...")
+    # Sort
+    stage.sort(key=lambda x: (x.page, x.bbox[0]))
+
+    # logger.debug(f"Stage: {stage}")
+
+    first_element_on_line = stage[0]
+    page_number = first_element_on_line.page
+    line_number = 0
+    full_line_text = ""
+    start_postion = 0
+
+    try:
+        # Convert First Element into Int
+        line_number = int(first_element_on_line.text)
+
+        start_postion = stage[1].bbox[0]
+        # Skip the first, because it is the line number
+        for z in stage[1:]:
+            full_line_text += z.text
+    except ValueError:
+        # ValueError: invalid literal for int()
+        # The first is not a line number, so something weird is happening
+        # Just leave it alone.
+        for z in stage:
+            full_line_text += z.text
+        start_postion = first_element_on_line.bbox[0]
+    except IndexError:
+        # IndexError: list index out of range
+        # This could happen when len(stage) < 2
+        # so less than two elements on the line
+        start_postion = first_element_on_line.bbox[0]
+        for z in stage:
+            full_line_text += z.text
+
+    # There are sometimes random line breaks in a single line string
+    # This can happen when redactions occur on a line. So when a name has
+    # been redacted and replaced with "W-7" it will be
+    # Pg.08 Ln: 24, Start: 171.0, Txt: b'Q.   Is that consistent with the testimony -- or excuse'
+    # Pg.08 Ln: 25, Start: 135.0, Txt: b'me, not the testimony -- is that consistent with what'
+    # Pg.09 Ln: 01, Start: 174.071, Txt: b'W-7\ntold you about what he was doing that day?'
+    # Pg.09 Ln: 02, Start: 171.0, Txt: b'A.   Yes, sir.'
+    # Pg.09 Ln: 03, Start: 171.0, Txt: b'Q.   And in fact, are you aware that\nW-7\nsaid'
+    # Pg.09 Ln: 04, Start: 135.0, Txt: b'that he was walking his dog and walked by an individual that'
+
+    # if it is the same line, we should replace any line breaks with " "
+    full_line_text = full_line_text.replace("\n", " ")
+
+    # First element should be a line number
+    new_line = Line(
+        page=page_number,
+        line_number=line_number,
+        start_position=start_postion,
+        text=full_line_text,
+    )
+    logger.debug(f"New Line Created: {new_line}")
+
+    return new_line
+
+
 def _convert_elements_on_page_into_lines(
     elements: List[TextElement], fudge_factor: int = 10
 ) -> List[Line]:
@@ -189,7 +278,7 @@ def _convert_elements_on_page_into_lines(
     filtered_elements = [x for x in elements if x.text.strip()]
 
     for i, e in enumerate(filtered_elements):
-        logger.info(f"Loop {i},\nStaged Len: {len(stage)}, Element: {e}")
+        # logger.info(f"Loop {i},\nStaged Len: {len(stage)}, Element: {e}")
         # print(f"Loop {i},\nStaged Len: {len(stage)}, Element: {e}")
 
         if i == 0:
@@ -207,68 +296,22 @@ def _convert_elements_on_page_into_lines(
             # print("Same line. Append")
             stage.append(e)
         else:
-            # This is a new line
-            # print("New line.")
-            # Sort
-            stage.sort(key=lambda x: (x.page, x.bbox[0]))
-
-            logger.debug(f"Stage: {stage}")
-
-            first_element_on_line = stage[0]
-            line_number = 0
-            full_line_text = ""
-            start_postion = 0
-
-            try:
-                # Convert First Element into Int
-                line_number = int(first_element_on_line.text)
-
-                start_postion = stage[1].bbox[0]
-                # Skip the first, because it is the line number
-                for z in stage[1:]:
-                    full_line_text += z.text
-            except ValueError:
-                # ValueError: invalid literal for int()
-                # The first is not a line number, so something weird is happening
-                # Just leave it alone.
-                for z in stage:
-                    full_line_text += z.text
-                start_postion = first_element_on_line.bbox[0]
-            except IndexError:
-                # IndexError: list index out of range
-                # This could happen when len(stage) < 2
-                # so less than two elements on the line
-                start_postion = first_element_on_line.bbox[0]
-                for z in stage:
-                    full_line_text += z.text
-
-            # There are sometimes random line breaks in a single line string
-            # This can happen when redactions occur on a line. So when a name has
-            # been redacted and replaced with "W-7" it will be
-            # Pg.08 Ln: 24, Start: 171.0, Txt: b'Q.   Is that consistent with the testimony -- or excuse'
-            # Pg.08 Ln: 25, Start: 135.0, Txt: b'me, not the testimony -- is that consistent with what'
-            # Pg.09 Ln: 01, Start: 174.071, Txt: b'W-7\ntold you about what he was doing that day?'
-            # Pg.09 Ln: 02, Start: 171.0, Txt: b'A.   Yes, sir.'
-            # Pg.09 Ln: 03, Start: 171.0, Txt: b'Q.   And in fact, are you aware that\nW-7\nsaid'
-            # Pg.09 Ln: 04, Start: 135.0, Txt: b'that he was walking his dog and walked by an individual that'
-
-            # if it is the same line, we should replace any line breaks with " "
-            full_line_text = full_line_text.replace("\n", " ")
-
-            # First element should be a line number
-            new_line = Line(
-                page=e.page,
-                line_number=line_number,
-                start_position=start_postion,
-                text=full_line_text,
-            )
+            new_line = _create_line_from_staged_elements(stage)
             lines.append(new_line)
             # Reset our var
             last_top = current_top
+
+            # logger.debug(f"Clearing the current stage.")
             stage.clear()
             # This element is the start of the next line
             stage.append(e)
         # print(f"End Loop {i} #########")
+
+    # Final Loop
+    if len(stage) > 0:
+        # If anything is staged, make a line
+        new_line = _create_line_from_staged_elements(stage)
+        lines.append(new_line)
 
     return lines
 

@@ -58,12 +58,13 @@ def _update_dict(this_dict: dict, l: Line, note) -> dict:
 
 def _get_result(values_dict: dict) -> float | None:
     """
+    Returns the start position which occurs most frequently in the values_dict.
+
     Return the first value from the sorted tuples of x position.
     The tuples are first sorted by the frequency of the starting positon.
     The position that occurs most frequently should be the correct start
     position for regex used to create the dictionary.
 
-    Returns the start position which occurs most frequently in the values_dict.
     """
 
     # Sort tuple (start_position, number of occurences)
@@ -85,7 +86,7 @@ def _analyze_lines(lines: List[Line]):
     logger.info("Analyzing Lines")
     # logger.debug(lines)
     # logger.debug(f"Lines: {pprint.pprint(lines)}")
-    logger.debug(f"Lines:\n{pprint.pformat(lines)}")
+    # logger.debug(f"Lines:\n{pprint.pformat(lines)}")
 
     q_a_dict = dict()
     speaker_dict = dict()
@@ -151,6 +152,24 @@ def _analyze_lines(lines: List[Line]):
     return (line_number_position, continuation_position, q_position, speaker_position)
 
 
+def _format_line_numbers(starting_line: int, ending_line: int, starting_page: int, ending_page: int) -> str:
+
+    if starting_page != ending_page:
+        line_nums = f"{starting_page}:{starting_line}-{ending_page}:{ending_line}"
+    else:
+        line_nums = f"{starting_page}:{starting_line}-{ending_line}"
+
+    # line_nums = f"{starting_line}-{ending_line}"
+    # line_nums = "{:<5}".format(line_nums)
+
+    # [16:25-17:4]
+    line_nums = "{:<10}".format(line_nums)
+
+    line_nums = f"[{line_nums}]"
+
+    return line_nums
+
+
 def lines_to_paragraphs(
     lines: List[Line],
     include_page_numbers: bool = True,
@@ -159,7 +178,10 @@ def lines_to_paragraphs(
     include_date_with_page_numbers: bool = False,
 ):
 
-    logger.debug("Starting lines_to_paragraphs")
+    logger.info("Starting lines_to_paragraphs")
+    logger.info(f"include_page_number: {include_page_numbers}")
+    logger.info(f"include_line_number: {include_line_numbers}")
+
     logger.debug(f"Lines:\n{pprint.pformat(lines)}")
 
     pos_line_number, pos_continue, pos_question, pos_speaker = _analyze_lines(
@@ -169,16 +191,18 @@ def lines_to_paragraphs(
     # lets add 1.5 and cast to an integer
     # anything less than this x value, will be a continuation line
     continue_integer = int(pos_continue + 1.5)
+    logger.info(f"Continuation Position Detected at: {continue_integer}")
 
     paragraphs = list()
     new_paragraph = ""
     current_page_number = 0
     starting_line = 0
+    starting_page = 0
     ending_line = 0
     date_of_transcript: datetime | None = None
 
-    for l in lines:
-        logger.debug(l)
+    for i, l in enumerate(lines):
+        logger.debug(f"Line: {l}")
         if current_page_number == 1:
             # If this is the first page. Lets look for the
             # date of this transcript.
@@ -213,8 +237,12 @@ def lines_to_paragraphs(
                 ending_line = l.line_number
 
         else:
+            # NEW PARAGRAPH
+
             # This is to the right of the continuation integer.
             # This should be a new paragraph.
+            logger.debug(
+                f"New Paragraph Detected: {l.start_position} greater than {continue_integer}")
 
             # This is the start of a new paragraph, so deal with the
             # pre-existing paragraph before checking the new one
@@ -225,19 +253,20 @@ def lines_to_paragraphs(
                 # Most listeners will not want to hear the line numbers read for
                 # each new paragraph.
 
-                line_nums = f"{starting_line}-{ending_line}"
-                line_nums = "{:<5}".format(line_nums)
+                line_nums = _format_line_numbers(
+                    starting_line, ending_line, starting_page, current_page_number)
 
-                line_nums = f"[{line_nums}]"
                 paragraphs.append(f"{line_nums}  {new_paragraph}")
             else:
                 # Just the paragraph
                 paragraphs.append(new_paragraph)
                 # logger.debug(f"Append: {new_paragraph}")
 
-            # START NEW PARAGRAPH
-            # Reset Vars
+            logger.debug(f"Appending Paragraph: {new_paragraph}")
+
+            # Reset Variables for New Paragraph
             starting_line = l.line_number  # The starting line of this new paragraph
+            starting_page = l.page
             ending_line = l.line_number
             new_paragraph = l.text
             # Check if starts with  Q. or A.
@@ -257,6 +286,26 @@ def lines_to_paragraphs(
                 # New Speaker
                 pass
 
+            # LAST LINE
+            # If Last Line Then Add IT AS PARAGRAPH
+            if len(lines) == i + 1:
+                if include_line_numbers:
+                    # Insert the line numbers in side square brackets
+                    # Note: Some tts reader ignore text inside square brackets.
+                    # Most listeners will not want to hear the line numbers read for
+                    # each new paragraph.
+
+                    line_nums = _format_line_numbers(
+                        starting_line, ending_line, starting_page, current_page_number)
+
+                    paragraphs.append(f"{line_nums}  {new_paragraph}")
+                else:
+                    # Just the paragraph
+                    paragraphs.append(new_paragraph)
+                    # logger.debug(f"Append: {new_paragraph}")
+
+                logger.debug(f"Appending Last Paragraph: {new_paragraph}")
+
         if include_page_numbers:
             # Add Page Numbers as Separate paragraphs in the list
             if current_page_number != l.page:
@@ -268,14 +317,15 @@ def lines_to_paragraphs(
                     # Check that date_of_transcript is not None
                     if date_of_transcript:
                         paragraphs.append(
-                            f"[PAGE: {l.page}, {date_of_transcript.strftime('%A, %B %d, %Y')}]"
+                            f"[**PAGE: {l.page}, {date_of_transcript.strftime('%A, %B %d, %Y')}**]"
                         )
                     else:
-                        paragraphs.append(f"[PAGE: {l.page}]")
+                        paragraphs.append(f"[**PAGE: {l.page}**]")
                 else:
-                    paragraphs.append(f"[PAGE: {l.page}]")
+                    paragraphs.append(f"[**PAGE: {l.page}**]")
 
         # Update Current Page Number
         current_page_number = l.page
 
+    logger.debug(f"Paragraphs:\n{pprint.pformat(paragraphs)}")
     return paragraphs

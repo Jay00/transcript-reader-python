@@ -9,15 +9,18 @@ from exporter import lines_to_paragraphs
 logger = logging.getLogger(__name__)
 
 
-def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=True):
+def convert_file(file_path: Path,  pgNum: bool = True, lnNum: bool = True, qa: bool = True, date: bool = True):
+    logger.info(f"Processing {file_path.name}")
+
+    # logger.info(
+    #     f"convert_file received parameters:\npgNum: {pgNum}\nlnNum: {lnNum}\nqa: {qa}")
+
     if not file_path.is_file():
         logger.warning(f"Path is not a file: {file_path}")
         return
 
     if file_path.suffix != ".pdf":
         logger.warning(f"This file is not a PDF: {file_path}")
-
-    logger.info(f"Processing {file_path.name}")
 
     # Open the document stream
     document = open(file_path, "rb")
@@ -40,9 +43,15 @@ def convert_file(file_path: Path, pgNum=True, lnNum=True, qa=True, date=True):
     logger.info(f"Processed {len(lines)} transcript lines.")
 
 
-def main(path_str: str, pgNum=True, lnNum=True, qa=True, date=True):
+def main(path_str: str, pgNum=False, lnNum=True, qa=True, date=True):
 
     logger.info(f"Processing Path: {path_str}")
+    logger.info(
+        f"Received parameters:\
+            \n\t\t\tpgNum: {pgNum} (include separate page numbers)\
+            \n\t\t\tlnNum: {lnNum} (include line numbers)\
+            \n\t\t\tqa: {qa} (include [Q.] or [A.]\
+            \n\t\t\tdate: {date} (include dates (only works with include page numbers True))")
     path = Path(path_str)
 
     if path.is_dir():
@@ -52,8 +61,9 @@ def main(path_str: str, pgNum=True, lnNum=True, qa=True, date=True):
                 # only look at PDF documents
                 if p.suffix == ".pdf" or p.suffix == ".PDF":
                     try:
-                        convert_file(p, pgNum=pgNum, lnNum=lnNum,
+                        convert_file(file_path=p, pgNum=pgNum, lnNum=lnNum,
                                      qa=qa, date=date)
+
                     except Exception as err:
                         logger.error(
                             f"ERROR: Unable to Process File: {p.__str__()}")
@@ -65,7 +75,10 @@ def main(path_str: str, pgNum=True, lnNum=True, qa=True, date=True):
     else:
         # Single File
         if path.is_file():
-            convert_file(path)
+            convert_file(file_path=path, pgNum=pgNum, lnNum=lnNum,
+                         qa=qa, date=date)
+        else:
+            logger.warn("The provided path is not a file or directory.")
 
 
 if __name__ == "__main__":
@@ -75,13 +88,15 @@ if __name__ == "__main__":
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.INFO)
     formatter = logging.Formatter(
-        "%(levelname)s.%(name)s - {%(pathname)s:%(lineno)d} - %(message)s")
+        "%(levelname)s.%(name)s:%(lineno)d - %(message)s")
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
     # create file handler which logs even debug messages
     fh = logging.FileHandler('transcript.log', mode="w", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        "%(levelname)s.%(name)s:%(lineno)d - %(message)s")
     fh.setFormatter(formatter)
     # add the handlers to the logger
     root.addHandler(fh)
