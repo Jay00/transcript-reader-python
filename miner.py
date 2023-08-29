@@ -71,7 +71,7 @@ def MinePDFTranscript(
     pdfData: IO,
     left_margin: float = 0,
     right_margin: float = 0,
-    bottom_margin: float = 53,
+    bottom_margin: float = 0,
     top_margin: float = 0,
 ) -> List[Line]:
 
@@ -93,11 +93,13 @@ def MinePDFTranscript(
         line_overlap=0.5,
         char_margin=0.5,  # Default 2.0
         line_margin=0.5,  # Default 0.5
-        word_margin=0.0,  # Default 0.1
+        word_margin=0.1,  # Default 0.1
         boxes_flow=0.5,  # Default 0.5
         detect_vertical=False,  # If vertical text should be considered during layout analysis
         all_texts=False,
     )  # If layout analysis should be performed on text in figures.
+
+    # [6:10-12   ]  [Q.] And so, that time s t amp up in the top right corner, the body-worn camer a , wher e it says 2021/08/07, that's the date of August 7th, right?
 
     # Create a PDF page aggregator object.
     device = PDFPageAggregator(rsrcmgr, laparams=laparams)

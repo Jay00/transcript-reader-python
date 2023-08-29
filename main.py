@@ -9,7 +9,15 @@ from exporter import lines_to_paragraphs
 logger = logging.getLogger(__name__)
 
 
-def convert_file(file_path: Path,  pgNum: bool = True, lnNum: bool = True, qa: bool = True, date: bool = True):
+def convert_file(file_path: Path,
+                 pgNum: bool = True,
+                 lnNum: bool = True,
+                 qa: bool = True,
+                 date: bool = True,
+                 left_margin: float = 0,
+                 right_margin: float = 0,
+                 bottom_margin: float = 0,
+                 top_margin: float = 0):
     logger.info(f"Processing {file_path.name}")
 
     # logger.info(
@@ -26,7 +34,8 @@ def convert_file(file_path: Path,  pgNum: bool = True, lnNum: bool = True, qa: b
     document = open(file_path, "rb")
 
     # Extract the lines
-    lines = MinePDFTranscript(document)
+    lines = MinePDFTranscript(document, left_margin=left_margin,
+                              right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
     paragraphs = lines_to_paragraphs(
         lines,
         include_page_numbers=pgNum,
@@ -43,7 +52,15 @@ def convert_file(file_path: Path,  pgNum: bool = True, lnNum: bool = True, qa: b
     logger.info(f"Processed {len(lines)} transcript lines.")
 
 
-def main(path_str: str, pgNum=False, lnNum=True, qa=True, date=True):
+def main(path_str: str,
+         pgNum=False,
+         lnNum=True,
+         qa=True,
+         date=True,
+         left_margin: float = 0,
+         right_margin: float = 0,
+         bottom_margin: float = 53,
+         top_margin: float = 0):
 
     logger.info(f"Processing Path: {path_str}")
     logger.info(
@@ -62,7 +79,7 @@ def main(path_str: str, pgNum=False, lnNum=True, qa=True, date=True):
                 if p.suffix == ".pdf" or p.suffix == ".PDF":
                     try:
                         convert_file(file_path=p, pgNum=pgNum, lnNum=lnNum,
-                                     qa=qa, date=date)
+                                     qa=qa, date=date, left_margin=left_margin, right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
 
                     except Exception as err:
                         logger.error(
@@ -76,7 +93,7 @@ def main(path_str: str, pgNum=False, lnNum=True, qa=True, date=True):
         # Single File
         if path.is_file():
             convert_file(file_path=path, pgNum=pgNum, lnNum=lnNum,
-                         qa=qa, date=date)
+                         qa=qa, date=date, left_margin=left_margin, right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
         else:
             logger.warn("The provided path is not a file or directory.")
 
