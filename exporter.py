@@ -11,6 +11,26 @@ logger = logging.getLogger(__name__)
 pp = pprint.PrettyPrinter(indent=4)
 
 
+def _format_line_numbers(starting_line: int, ending_line: int, starting_page: int, ending_page: int) -> str:
+
+    if starting_page != ending_page:
+        # Starting page is not the same as the ending page.
+        line_nums = f"{starting_page}:{starting_line}-{ending_page}:{ending_line}"
+    else:
+        # Start page and end page are the same, no need to add the end page.
+        line_nums = f"{starting_page}:{starting_line}-{ending_line}"
+
+    # line_nums = f"{starting_line}-{ending_line}"
+    # line_nums = "{:<5}".format(line_nums)
+
+    # [16:25-17:4]
+    line_nums = "{:<10}".format(line_nums)
+
+    line_nums = f"[{line_nums}]"
+
+    return line_nums
+
+
 class Speaker(object):
     """
     Represents a section of text with a primary speaker.
@@ -27,6 +47,58 @@ class Speaker(object):
 
     def __repr__(self):
         return f"<SPEAKER: {self.name} Pages: {self.pages}>"
+
+
+class Paragraph(object):
+    """
+    Represents a paragraph of text with a primary speaker.
+    """
+
+    def __init__(self):
+        self.text = ""
+        self.speaker: Speaker = None
+        self.page_start: int = 0
+        self.page_end: int = 0
+        self.line_start: int = 0
+        self.line_end: int = 0
+        self.question: bool = False
+        self.answer: bool = False
+
+    def __repr__(self) -> str:
+        return f"<PARAGRAPH: {self.name} Pages: {self.pages}>"
+
+    def __str__(self, include_line_numbers: bool = True, include_q_a_next_to_line_number: bool = True) -> str:
+
+        txt = self.text
+
+        if include_q_a_next_to_line_number:
+
+            if self.question:
+                # Add Question or Answer back in but with brackets
+                txt = f"[Q] {txt}"
+
+            if self.answer:
+                # Add Question or Answer back in but with brackets
+                txt = f"[A] {txt}"
+
+        if include_line_numbers:
+            line_nums = _format_line_numbers(
+                self.line_start, self.line_end, self.page_start, self.page_end)
+            return f"{line_nums}  {txt}"
+
+    def add_text(self, text: str):
+        if self.text == "":
+            self.text = text.strip()
+        else:
+            self.text = f"{self.text} {text.strip()}"
+
+    def remove_q_a(self):
+        # Remove Q. or A. from text
+        # Just REMOVE Q. A.
+        # Q. A. constantly being read aloud is distracting and interupts the flow
+        # print(bytes(self.text, encoding="utf-8"))
+        res = qa.sub("", self.text)
+        self.text = res
 
 
 # qa = re.compile("^[AQ]\.\s+")  # Capture Q. or A.
@@ -156,37 +228,11 @@ def _analyze_lines(lines: List[Line]):
     return (line_number_position, continuation_position, q_position, speaker_position)
 
 
-def _format_line_numbers(starting_line: int, ending_line: int, starting_page: int, ending_page: int) -> str:
-
-    if starting_page != ending_page:
-        # Starting page is not the same as the ending page.
-        line_nums = f"{starting_page}:{starting_line}-{ending_page}:{ending_line}"
-    else:
-        # Start page and end page are the same, no need to add the end page.
-        line_nums = f"{starting_page}:{starting_line}-{ending_line}"
-
-    # line_nums = f"{starting_line}-{ending_line}"
-    # line_nums = "{:<5}".format(line_nums)
-
-    # [16:25-17:4]
-    line_nums = "{:<10}".format(line_nums)
-
-    line_nums = f"[{line_nums}]"
-
-    return line_nums
-
-
 def lines_to_paragraphs(
     lines: List[Line],
-    include_page_numbers: bool = True,
-    include_line_numbers: bool = False,
-    include_q_a_next_to_line_number: bool = False,
-    include_date_with_page_numbers: bool = False,
 ):
 
     logger.info("Starting lines_to_paragraphs")
-    logger.info(f"include_page_number: {include_page_numbers}")
-    logger.info(f"include_line_number: {include_line_numbers}")
 
     logger.debug(f"Lines:\n{pprint.pformat(lines)}")
 
@@ -201,8 +247,10 @@ def lines_to_paragraphs(
 
     paragraphs = list()
     speakers: Dict[str, Speaker] = dict()
+    list_of_paragraph_objects: List[Paragraph] = list()
 
     new_paragraph = ""
+    current_paragraph_object = Paragraph()
     current_speaker = None
     current_questioner = None
     current_procedure = None  # None, Direct, Cross
@@ -242,10 +290,11 @@ def lines_to_paragraphs(
                 # Note: We need to pass here. You cannot use continue because
                 # we need the rest of the loop to be evaluated.
             else:
-                new_paragraph = f"{new_paragraph} {l.text}"
                 # Update the ending line number each time a continuation line
                 # is evaluated.
-                ending_line = l.line_number
+                current_paragraph_object.add_text(l.text)
+                current_paragraph_object.line_end = l.line_number
+                current_paragraph_object.page_end = l.page
 
         else:
             # NEW PARAGRAPH
@@ -257,48 +306,37 @@ def lines_to_paragraphs(
 
             # This is the start of a new paragraph, so deal with the
             # pre-existing paragraph before checking the new one
-
-            if include_line_numbers:
-                # Insert the line numbers in side square brackets
-                # Note: Some tts reader ignore text inside square brackets.
-                # Most listeners will not want to hear the line numbers read for
-                # each new paragraph.
-
-                line_nums = _format_line_numbers(
-                    starting_line, ending_line, starting_page, current_page_number)
-
-                paragraphs.append(f"{line_nums}  {new_paragraph}")
-            else:
-                # Just the paragraph
-                paragraphs.append(new_paragraph)
-                # logger.debug(f"Append: {new_paragraph}")
-
-            logger.debug(f"Appending Paragraph: {new_paragraph}")
+            list_of_paragraph_objects.append(current_paragraph_object)
+            logger.debug(f"Appending Paragraph: {current_paragraph_object}")
 
             # Reset Variables for New Paragraph
-            starting_line = l.line_number  # The starting line of this new paragraph
-            starting_page = l.page
-            ending_line = l.line_number
-            new_paragraph = l.text
+            current_paragraph_object = Paragraph()  # New Paragraph
+            current_paragraph_object.add_text(l.text)
+            current_paragraph_object.page_start = l.page
+            current_paragraph_object.line_start = l.line_number
+            current_paragraph_object.page_end = l.page
+            current_paragraph_object.line_end = l.line_number
 
             # Check if new speaker, ie. MR. NAME:
-            mo_speaker_regex = speaker_regex.search(new_paragraph)
+            mo_speaker_regex = speaker_regex.search(l.text)
             if mo_speaker_regex:
                 # New Speaker
-                # logger.debug("New speaker detected.")
+                # logger.info("New speaker detected.")
                 # speakers.add(mo_speaker_regex.group(0))
                 this_speaker = mo_speaker_regex.group(0)
 
                 if speakers.__contains__(this_speaker):
                     # update speaker
                     existing_speaker = speakers[this_speaker]
-                    existing_speaker.update_pages(starting_page)
+                    existing_speaker.update_pages(l.page)
                     current_speaker = existing_speaker
                 else:
                     # new speaker
-                    new_speaker = Speaker(this_speaker, page=starting_page)
+                    new_speaker = Speaker(this_speaker, page=l.page)
                     speakers[this_speaker] = new_speaker
                     current_speaker = new_speaker
+
+                current_paragraph_object.speaker = current_speaker
 
                 if this_speaker.startswith("BY "):
                     current_questioner = current_speaker
@@ -325,61 +363,26 @@ def lines_to_paragraphs(
                 mo_qa = qa.search(l.text)
                 # Check if Q. or A.
                 if mo_qa:
-                    # Just REMOVE Q. A.
-                    # Q. A. constantly being read aloud is distracting and interupts the flow
-                    new_paragraph = qa.sub("", new_paragraph)
+                    q_or_a = mo_qa.group().strip()
 
-                    if include_q_a_next_to_line_number:
-
-                        q_or_a = mo_qa.group().strip()
+                    if q_or_a == "Q":
                         # Add Question or Answer back in but with brackets
-                        new_paragraph = f"[{q_or_a}] {new_paragraph}"
+                        current_paragraph_object.question = True
+                        current_paragraph_object.remove_q_a()
 
-                    # if q_or_a == "Q":
-                    #     # Add Question or Answer back in but with brackets
-                    #     new_paragraph = f"[{current_questioner.name}] {new_paragraph}"
+                    if q_or_a == "A":
+                        current_paragraph_object.answer = True
+                        current_paragraph_object.remove_q_a()
 
             # LAST LINE
             # If Last Line Then Add IT AS PARAGRAPH
             if len(lines) == i + 1:
-                if include_line_numbers:
-                    # Insert the line numbers in side square brackets
-                    # Note: Some tts reader ignore text inside square brackets.
-                    # Most listeners will not want to hear the line numbers read for
-                    # each new paragraph.
-
-                    line_nums = _format_line_numbers(
-                        starting_line, ending_line, starting_page, current_page_number)
-
-                    paragraphs.append(f"{line_nums}  {new_paragraph}")
-                else:
-                    # Just the paragraph
-                    paragraphs.append(new_paragraph)
-                    # logger.debug(f"Append: {new_paragraph}")
-
                 logger.debug(f"Appending Last Paragraph: {new_paragraph}")
-
-        if include_page_numbers:
-            # Add Page Numbers as Separate paragraphs in the list
-            if current_page_number != l.page:
-                # New page reached.
-                # If the current page number has changed, add
-                # the current page number into the list of paragraphs.
-                # print(f"This page: {current_page_number}, last page: {l.page}")
-                if include_date_with_page_numbers:
-                    # Check that date_of_transcript is not None
-                    if date_of_transcript:
-                        paragraphs.append(
-                            f"[**PAGE: {l.page}, {date_of_transcript.strftime('%A, %B %d, %Y')}**]"
-                        )
-                    else:
-                        paragraphs.append(f"[**PAGE: {l.page}**]")
-                else:
-                    paragraphs.append(f"[**PAGE: {l.page}**]")
+                list_of_paragraph_objects.append(current_paragraph_object)
 
         # Update Current Page Number
         current_page_number = l.page
 
     logger.debug(f"Paragraphs:\n{pprint.pformat(paragraphs)}")
     logger.info(f"Detected Speakers:\n{pprint.pformat(speakers)}")
-    return paragraphs
+    return list_of_paragraph_objects

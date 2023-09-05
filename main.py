@@ -36,18 +36,13 @@ def convert_file(file_path: Path,
     # Extract the lines
     lines = MinePDFTranscript(document, left_margin=left_margin,
                               right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
-    paragraphs = lines_to_paragraphs(
-        lines,
-        include_page_numbers=pgNum,
-        include_line_numbers=lnNum,
-        include_q_a_next_to_line_number=qa,
-        include_date_with_page_numbers=date,
-    )
+    paragraphs = lines_to_paragraphs(lines)
 
     txt_file = file_path.with_suffix(".txt")
     with open(txt_file, "w", encoding="utf-8") as file:
         for par in paragraphs:
-            file.write(f"{par}\n")
+            file.write(
+                f"{par.__str__(include_line_numbers=lnNum, include_q_a_next_to_line_number=qa)}\n")
 
     logger.info(f"Processed {len(lines)} transcript lines.")
 
