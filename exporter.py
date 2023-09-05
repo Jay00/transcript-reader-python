@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List, Type, IO
+from typing import List, Type, IO, Dict, Set
 from miner import Line
 import pprint
 from datetime import datetime
@@ -16,23 +16,27 @@ class Speaker(object):
     Represents a section of text with a primary speaker.
     """
 
-    def __init__(self, primary_speaker: str):
-        self.primary_speaker = primary_speaker
+    def __init__(self, name: str, page: int):
+        self.name = name
+        self.pages: Set[int] = set([page])
         #  self.judges: List[CCR_Judge] = list()
-        self.paragraphs: List[str] = list()
+        # self.paragraphs: List[str] = list()
+
+    def update_pages(self, page):
+        self.pages.add(page)
 
     def __repr__(self):
-        return f"Speaker: {self.primary_speaker}"
+        return f"<SPEAKER: {self.name} Pages: {self.pages}>"
 
 
 # qa = re.compile("^[AQ]\.\s+")  # Capture Q. or A.
 # qa = re.compile("^[AQ]")  # Capture Q. or A.
 qa = re.compile("^[AQ][\s\.]+")  # Loose and Greedy
-speaker = re.compile(
+speaker_regex = re.compile(
     "^[A-Z\.\s]+:"
 )  # Capture new speaker, ie., COURT:, MR. CLARK: BY MR. SMITH:
 # Capture new speaker, ie., BY MR. SMITH:
-by_mr_smith = re.compile("^BY [A-Z\.\s]+:$")
+by_mr_smith_regex = re.compile("^BY [A-Z\.\s]+:$")
 empty_line_number = re.compile("^[0-9]{1,2}$")
 date_line_re = re.compile(
     "(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday), (January|February|March|April|May|June|July|August|September|October|November|December) ([\d]+), ([\d]{4})$"
@@ -100,7 +104,7 @@ def _analyze_lines(lines: List[Line]):
             logger.debug("Q. A. Detected")
             _update_dict(q_a_dict, l, "New Questions Position")
 
-        elif speaker.search(l.text):
+        elif speaker_regex.search(l.text):
             # New speaker detected
             # MR. SMITH:
             logger.debug("New speaker detected")
@@ -196,7 +200,12 @@ def lines_to_paragraphs(
     logger.info(f"Continuation Position Detected at: {continue_integer}")
 
     paragraphs = list()
+    speakers: Dict[str, Speaker] = dict()
+
     new_paragraph = ""
+    current_speaker = None
+    current_questioner = None
+    current_procedure = None  # None, Direct, Cross
     current_page_number = 0
     starting_line = 0
     starting_page = 0
@@ -215,7 +224,7 @@ def lines_to_paragraphs(
                 date_of_transcript = datetime.strptime(
                     date_match.group(0), "%A, %B %d, %Y")
                 logger.info(
-                    f"Transcript Date: {date_of_transcript.strftime('%A, %B %d, %Y')}")
+                    f"Transcript Date Found: {date_of_transcript.strftime('%A, %B %d, %Y')}")
 
         # Check if this line is a new line or a continuing line
         # Assumes all lines to the left of the continue_integer are
@@ -271,22 +280,64 @@ def lines_to_paragraphs(
             starting_page = l.page
             ending_line = l.line_number
             new_paragraph = l.text
-            # Check if starts with  Q. or A.
-            mo_qa = qa.search(l.text)
-            # Check if Q. or A.
-            if mo_qa:
-                # Just REMOVE Q. A.
-                # Q. A. constantly being read aloud is distracting and interupts the flow
-                new_paragraph = qa.sub("", new_paragraph)
-
-                if include_q_a_next_to_line_number:
-                    # Add Question or Answer back in but with brackets
-                    new_paragraph = f"[{mo_qa.group().strip()}] {new_paragraph}"
 
             # Check if new speaker, ie. MR. NAME:
-            if speaker.search(new_paragraph):
+            mo_speaker_regex = speaker_regex.search(new_paragraph)
+            if mo_speaker_regex:
                 # New Speaker
-                pass
+                # logger.debug("New speaker detected.")
+                # speakers.add(mo_speaker_regex.group(0))
+                this_speaker = mo_speaker_regex.group(0)
+
+                if speakers.__contains__(this_speaker):
+                    # update speaker
+                    existing_speaker = speakers[this_speaker]
+                    existing_speaker.update_pages(starting_page)
+                    current_speaker = existing_speaker
+                else:
+                    # new speaker
+                    new_speaker = Speaker(this_speaker, page=starting_page)
+                    speakers[this_speaker] = new_speaker
+                    current_speaker = new_speaker
+
+                if this_speaker.startswith("BY "):
+                    current_questioner = current_speaker
+
+            # elif new_paragraph == "EXAMINATION":
+            #     # Grand Jury Transcripts just have EXAMINATION
+            #     current_procedure = "EXAMINATION"
+            #     new_paragraph = f"[***********] {new_paragraph}"
+
+            # elif new_paragraph == "DIRECT EXAMINATION":
+            #     current_procedure = "DIRECT EXAMINATION"
+            #     new_paragraph = f"[***********] {new_paragraph}"
+
+            # elif new_paragraph == "CROSS-EXAMINATION":
+            #     current_procedure = "CROSS-EXAMINATION"
+            #     new_paragraph = f"[***********] {new_paragraph}"
+
+            # elif new_paragraph == "REDIRECT-EXAMINATION":
+            #     current_procedure = "REDIRECT-EXAMINATION"
+            #     new_paragraph = f"[***********] {new_paragraph}"
+
+            else:
+                # Check if starts with  Q. or A.
+                mo_qa = qa.search(l.text)
+                # Check if Q. or A.
+                if mo_qa:
+                    # Just REMOVE Q. A.
+                    # Q. A. constantly being read aloud is distracting and interupts the flow
+                    new_paragraph = qa.sub("", new_paragraph)
+
+                    if include_q_a_next_to_line_number:
+
+                        q_or_a = mo_qa.group().strip()
+                        # Add Question or Answer back in but with brackets
+                        new_paragraph = f"[{q_or_a}] {new_paragraph}"
+
+                    # if q_or_a == "Q":
+                    #     # Add Question or Answer back in but with brackets
+                    #     new_paragraph = f"[{current_questioner.name}] {new_paragraph}"
 
             # LAST LINE
             # If Last Line Then Add IT AS PARAGRAPH
@@ -330,4 +381,5 @@ def lines_to_paragraphs(
         current_page_number = l.page
 
     logger.debug(f"Paragraphs:\n{pprint.pformat(paragraphs)}")
+    logger.info(f"Detected Speakers:\n{pprint.pformat(speakers)}")
     return paragraphs
