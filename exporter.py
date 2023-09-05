@@ -155,8 +155,10 @@ def _analyze_lines(lines: List[Line]):
 def _format_line_numbers(starting_line: int, ending_line: int, starting_page: int, ending_page: int) -> str:
 
     if starting_page != ending_page:
+        # Starting page is not the same as the ending page.
         line_nums = f"{starting_page}:{starting_line}-{ending_page}:{ending_line}"
     else:
+        # Start page and end page are the same, no need to add the end page.
         line_nums = f"{starting_page}:{starting_line}-{ending_line}"
 
     # line_nums = f"{starting_line}-{ending_line}"
