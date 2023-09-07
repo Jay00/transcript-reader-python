@@ -326,15 +326,20 @@ def lines_to_paragraphs(
                 this_speaker = mo_speaker_regex.group(0)
 
                 if speakers.__contains__(this_speaker):
-                    # update speaker
+                    # update existing speaker
                     existing_speaker = speakers[this_speaker]
                     existing_speaker.update_pages(l.page)
                     current_speaker = existing_speaker
                 else:
-                    # new speaker
-                    new_speaker = Speaker(this_speaker, page=l.page)
-                    speakers[this_speaker] = new_speaker
-                    current_speaker = new_speaker
+
+                    if this_speaker == "APPEARANCES:":
+                        # Ignore "APPEARANCES:" which get detected as a speaker
+                        pass
+                    else:
+                        # create new speaker
+                        new_speaker = Speaker(this_speaker, page=l.page)
+                        speakers[this_speaker] = new_speaker
+                        current_speaker = new_speaker
 
                 current_paragraph_object.speaker = current_speaker
 
