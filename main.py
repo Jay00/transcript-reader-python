@@ -10,10 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def convert_file(file_path: Path,
-                 pgNum: bool = True,
                  lnNum: bool = True,
                  qa: bool = True,
-                 date: bool = True,
                  left_margin: float = 0,
                  right_margin: float = 0,
                  bottom_margin: float = 0,
@@ -48,7 +46,6 @@ def convert_file(file_path: Path,
 
 
 def main(path_str: str,
-         pgNum=False,
          lnNum=True,
          qa=True,
          date=True,
@@ -60,7 +57,6 @@ def main(path_str: str,
     logger.info(f"Processing Path: {path_str}")
     logger.info(
         f"Received parameters:\
-            \n\t\t\tpgNum: {pgNum} (include separate page numbers)\
             \n\t\t\tlnNum: {lnNum} (include line numbers)\
             \n\t\t\tqa: {qa} (include [Q.] or [A.]\
             \n\t\t\tdate: {date} (include dates (only works with include page numbers True))")
@@ -73,8 +69,8 @@ def main(path_str: str,
                 # only look at PDF documents
                 if p.suffix == ".pdf" or p.suffix == ".PDF":
                     try:
-                        convert_file(file_path=p, pgNum=pgNum, lnNum=lnNum,
-                                     qa=qa, date=date, left_margin=left_margin, right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
+                        convert_file(file_path=p, lnNum=lnNum,
+                                     qa=qa, left_margin=left_margin, right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
 
                     except Exception as err:
                         logger.error(
@@ -87,8 +83,8 @@ def main(path_str: str,
     else:
         # Single File
         if path.is_file():
-            convert_file(file_path=path, pgNum=pgNum, lnNum=lnNum,
-                         qa=qa, date=date, left_margin=left_margin, right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
+            convert_file(file_path=path, lnNum=lnNum,
+                         qa=qa, left_margin=left_margin, right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
         else:
             logger.warn("The provided path is not a file or directory.")
 
@@ -130,11 +126,17 @@ if __name__ == "__main__":
         description="Extract and format text from PDF transcripts.",
         epilog="For more information.",
     )
-    # positional argument
+    # positional required argument
     parser.add_argument(
         "path",
         help="A path to a PDF transcript or directory contiaining PDF transcripts.",
     )
+
+    # parser.add_argument(
+    #     '-exln, --exlinenumbers',
+    #     action="store_true",
+    #     help='whether the text output should include line numbers'
+    # )
 
     # parser.add_argument(
     #     "--include-page-numbers",
@@ -144,9 +146,14 @@ if __name__ == "__main__":
     # )
     # parser.add_argument('--include_date_with_page_numbers')
     args = parser.parse_args()
-    print(args.path)
 
-    main(args.path)
+    print(f"Arguments: {args}")
+    print(f"Working on Path: {args.path}")
+
+    # if args.exlinenumbers:
+    #     print("Exclude Line Numbers ON")
+
+    main(args.path, lnNum=False)
     # main("./omar")
 
     print(f"COMPLETE")
