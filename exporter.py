@@ -85,6 +85,8 @@ class Paragraph(object):
             line_nums = _format_line_numbers(
                 self.line_start, self.line_end, self.page_start, self.page_end)
             return f"{line_nums}  {txt}"
+        else:
+            return txt
 
     def add_text(self, text: str):
         if self.text == "":
@@ -261,7 +263,7 @@ def lines_to_paragraphs(
     date_of_transcript: datetime | None = None
 
     for i, l in enumerate(lines):
-        logger.debug(f"Line: {l}")
+        logger.debug(f"Current Line of Lines: {l}")
         if current_page_number == 1:
             # If this is the first page. Lets look for the
             # date of this transcript.
@@ -390,4 +392,5 @@ def lines_to_paragraphs(
 
     logger.debug(f"Paragraphs:\n{pprint.pformat(paragraphs)}")
     logger.info(f"Detected Speakers:\n{pprint.pformat(speakers)}")
+
     return list_of_paragraph_objects

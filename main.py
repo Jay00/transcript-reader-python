@@ -16,10 +16,11 @@ def convert_file(file_path: Path,
                  right_margin: float = 0,
                  bottom_margin: float = 0,
                  top_margin: float = 0):
+
     logger.info(f"Processing {file_path.name}")
 
-    # logger.info(
-    #     f"convert_file received parameters:\npgNum: {pgNum}\nlnNum: {lnNum}\nqa: {qa}")
+    logger.info(
+        f"convert_file received parameters:\nlnNum: {lnNum}\nqa: {qa}")
 
     if not file_path.is_file():
         logger.warning(f"Path is not a file: {file_path}")
@@ -34,11 +35,16 @@ def convert_file(file_path: Path,
     # Extract the lines
     lines = MinePDFTranscript(document, left_margin=left_margin,
                               right_margin=right_margin, bottom_margin=bottom_margin, top_margin=top_margin)
+
+    logger.info(f"Lines: {lines[:5]}")
+
     paragraphs = lines_to_paragraphs(lines)
 
     txt_file = file_path.with_suffix(".txt")
     with open(txt_file, "w", encoding="utf-8") as file:
         for par in paragraphs:
+            logger.info(
+                f"Paragraph: {par.__str__(include_line_numbers=True, include_q_a_next_to_line_number=True)}")
             file.write(
                 f"{par.__str__(include_line_numbers=lnNum, include_q_a_next_to_line_number=qa)}\n")
 
@@ -102,7 +108,7 @@ if __name__ == "__main__":
 
     # create file handler which logs even debug messages
     fh = logging.FileHandler('transcript.log', mode="w", encoding="utf-8")
-    fh.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
         "%(levelname)s.%(name)s:%(lineno)d - %(message)s")
     fh.setFormatter(formatter)
@@ -153,7 +159,7 @@ if __name__ == "__main__":
     # if args.exlinenumbers:
     #     print("Exclude Line Numbers ON")
 
-    main(args.path, lnNum=False)
+    main(args.path, lnNum=True)
     # main("./omar")
 
     print(f"COMPLETE")
